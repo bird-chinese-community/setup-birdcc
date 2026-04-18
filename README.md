@@ -1,8 +1,40 @@
-# setup-birdcc
+<div align="center">
 
-Set up GitHub Actions runners for BIRD config automation.
+# 🕊️ setup-birdcc
 
-Use this action when a repository needs CI to lint, format-check, or parse-check BIRD configuration files. It installs Node.js, pnpm, and optionally BIRD2/BIRD3 so your workflow can run `birdcc` and `bird -p -c` without repeating runner setup boilerplate.
+</div>
+
+<p align="center">
+  <strong>Set up GitHub Actions runners for BIRD config automation</strong>
+</p>
+
+<p align="center">
+  <a href="https://github.com/marketplace/actions/setup-birdcc">
+    <img src="https://img.shields.io/badge/GitHub%20Actions-Marketplace-2088FF?style=flat-square&logo=github-actions&logoColor=white" alt="GitHub Actions Marketplace" />
+  </a>
+  <a href="https://github.com/bird-chinese-community/setup-birdcc/blob/main/LICENSE">
+    <img src="https://img.shields.io/badge/license-MIT-green.svg?style=flat-square" alt="MIT License" />
+  </a>
+  <a href="https://github.com/bird-chinese-community/setup-birdcc/actions/workflows/ci.yml">
+    <img src="https://github.com/bird-chinese-community/setup-birdcc/actions/workflows/ci.yml/badge.svg" alt="CI" />
+  </a>
+</p>
+
+<div align="center">
+
+English Version | [中文文档](./README.zh.md)
+
+> [Overview](#overview) · [Quick Start](#quick-start) · [Inputs](#inputs) · [Outputs](#outputs) · [Version Selection](#version-selection) · [BIRD Version Guide](#bird-version-guide) · [Real-World Patterns](#real-world-patterns) · [License Notes](#license-notes)
+
+</div>
+
+---
+
+## Overview
+
+`setup-birdcc` is a reusable composite GitHub Action that prepares a runner for BIRD configuration file automation. It installs Node.js, pnpm, and optionally BIRD2/BIRD3 so your workflow can run `birdcc` and `bird -p -c` without repeating runner setup boilerplate.
+
+Use this action when a repository needs CI to lint, format-check, or parse-check BIRD configuration files. It is a companion to the [BIRD-LSP](https://github.com/bird-chinese-community/BIRD-LSP) toolchain and its [`@birdcc/cli`](https://www.npmjs.com/package/@birdcc/cli) package.
 
 ```yaml
 steps:
@@ -19,11 +51,13 @@ steps:
       BIRD_BIN: ${{ steps.setup.outputs.bird-bin }}
 ```
 
-For action maintenance, local `act` notes, and release dry runs, see [DEVELOP.md](./DEVELOP.md).
+For action maintenance, local `act` notes, and release dry runs, see [README.DEV.md](./README.DEV.md).
+
+---
 
 ## What This Action Does
 
-`setup-birdcc` prepares the runner. It does not decide which config files are valid for your network and it does not run hidden lint commands for you.
+This action prepares the runner environment only. It does not decide which config files are valid for your network and it does not run hidden lint commands for you.
 
 | Capability          | Default   | Typical config-repo setting                                      |
 | ------------------- | --------- | ---------------------------------------------------------------- |
@@ -100,6 +134,8 @@ jobs:
 
 More copyable workflows live in [examples/](./examples/).
 
+---
+
 ## Version Selection
 
 Choose the ref based on how tightly you need to pin your supply chain.
@@ -113,6 +149,8 @@ Choose the ref based on how tightly you need to pin your supply chain.
 
 For protected production config repositories, pin to a full commit SHA after auditing the release. For normal CI, `@v1` is the friendlier default.
 
+---
+
 ## BIRD Version Guide
 
 | Input                                                    | Result                                                               |
@@ -124,6 +162,8 @@ For protected production config repositories, pin to a full commit SHA after aud
 | `bird-version: "3"` plus `bird-package-source: "ubuntu"` | Rejected, because Ubuntu does not provide BIRD3 through that source. |
 
 This action installs BIRD on the runner only. It does not vendor, commit, or redistribute BIRD source code or binaries.
+
+---
 
 ## Inputs
 
@@ -151,6 +191,8 @@ This action installs BIRD on the runner only. It does not vendor, commit, or red
 | `harden-runner`               | `false`                                           | Enable `step-security/harden-runner`.                                                        |
 | `harden-runner-egress-policy` | `audit`                                           | `audit` or `block`.                                                                          |
 
+---
+
 ## Outputs
 
 | Output            | Description                                                        |
@@ -158,6 +200,8 @@ This action installs BIRD on the runner only. It does not vendor, commit, or red
 | `bird-bin`        | Path to installed BIRD binary. Empty when `install-bird: "false"`. |
 | `bird-version`    | `bird --version` output. Empty when `install-bird: "false"`.       |
 | `turbo-cache-hit` | Exact Turbo cache hit from `actions/cache`.                        |
+
+---
 
 ## Real-World Patterns
 
@@ -189,6 +233,8 @@ steps:
       bird-version: ${{ matrix.bird-version }}
   - run: '"${{ steps.setup.outputs.bird-bin }}" -p -c bird.conf'
 ```
+
+---
 
 ## License Notes
 

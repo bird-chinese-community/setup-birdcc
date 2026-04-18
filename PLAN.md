@@ -1,243 +1,235 @@
-# PLAN.md – BirdCC Monorepo CI/CD & Developer Experience Upgrade
+# PLAN.md – setup-birdcc Next-Step Optimization Plan
 
-**Target Agent:** Codex (OpenAI Coding Agent)  
-**Context:** This plan is based on the existing `bird-chinese-community/BIRD-LSP` monorepo (pnpm + Turborepo + Changesets) and the architectural discussion in the chat history.  
-**Goal:** Implement a modern, reusable, locally-debuggable, and AI‑friendly CI/CD pipeline, integrate BIRD binary validation, and document the workflow for both humans and agents.
+**Context:** `setup-birdcc` is a production-grade, reusable composite GitHub Action that prepares a runner for BIRD configuration file automation. Its core loop is: checkout → Node.js + pnpm → (optional) submodules → (optional) dependencies → (optional) Turbo cache → (optional) BIRD2/BIRD3 → expose `bird-bin` output.
 
----
-
-## 1. Project Overview
-
-| Aspect               | Details                                                                     |
-| -------------------- | --------------------------------------------------------------------------- |
-| Repository           | `../BIRD-LSP`                                                               |
-| Package Manager      | pnpm (v10.18.3)                                                             |
-| Monorepo Tool        | Turborepo (pipeline defined in `turbo.json`)                                |
-| Versioning & Publish | Changesets + `bumpp` (script `release:publish`)                             |
-| Packages             | 8 packages under `packages/@birdcc/*`                                       |
-| License              | GPL-3.0 (compatible with BIRD’s GPL‑2+; no redistribution of BIRD binaries) |
-| Core Validation      | `bird -p` (BIRD configuration syntax check) invoked by LSP / CLI            |
+This document captures the _next wave_ of improvements based on a full review of the current implementation.
 
 ---
 
-## 2. Architecture & Design Principles
+## Current State Summary
 
-### 2.1 Layered Workflow Strategy
-
-We adopt **3 core workflows + 1 reusable composite action**:
-
-- **`setup-birdcc`** – Reusable composite action for environment initialization (Node, pnpm, Turbo cache, BIRD binary).
-- **`ci.yml`** – Main CI triggered on PRs and pushes to `main`. Runs **only affected packages** using Turbo’s `--filter` flag.
-- **`release.yml`** – Publish workflow triggered on `main` when Changesets are present. Automates versioning and npm publish.
-- **`lint-workflows.yml`** – Meta‑CI that lints all GitHub Actions YAML files with `actionlint`.
-
-### 2.2 Toolchain Philosophy
-
-| Tool                          | Purpose                        | Why Chosen (DX & AI Agent Native)                                      |
-| ----------------------------- | ------------------------------ | ---------------------------------------------------------------------- |
-| `pnpm/action-setup`           | Package manager setup          | Official, fastest, auto‑caches `node_modules` and `.pnpm-store`.       |
-| `actions/cache`               | Turbo cache persistence        | Reduces CI time from minutes to seconds.                               |
-| `nektos/act`                  | Local GitHub Actions emulation | **Game Changer** – full local CI loop without pushing.                 |
-| `rhysd/actionlint`            | Lint workflow YAML files       | Industry standard; prevents syntax errors and enforces best practices. |
-| `changesets/action`           | Release automation             | Integrates seamlessly with existing `release:publish` script.          |
-| `step-security/harden-runner` | Security hardening             | Audit egress policy, prevent token leaks (optional but recommended).   |
+| Area                  | Status   | Notes                                                                          |
+| --------------------- | -------- | ------------------------------------------------------------------------------ |
+| `action.yml`          | ✅ Solid | All inputs/outputs defined; composite steps well-ordered.                      |
+| Input validation      | ✅ Solid | `validate-inputs.mjs` rejects unsafe paths, bad enums, control chars.          |
+| BIRD installation     | ✅ Solid | `install-bird.mjs` supports Ubuntu and CZNIC apt sources for BIRD2/BIRD3.      |
+| Example workflows     | ✅ Solid | 6 examples covering lint, fmt, changed-files, matrix, submodules, SHA-pinned.  |
+| CI (action self-test) | ✅ Solid | Smoke jobs + Node script tests; invalid-input rejection verified.              |
+| Release workflow      | ✅ Solid | Dry-run validation, source archive, GitHub Release on semver tag push.         |
+| README.md             | ✅ Good  | Comprehensive; recently polished with nav links, badges, and `---` separators. |
+| README.zh.md          | ✅ Good  | Newly created; mirrors English content with full Chinese translation.          |
+| README.DEV.md         | ✅ Good  | Covers local `act` smoke tests, dry-run workflow, and release tagging.         |
+| `pnpm-lock.yaml`      | ✅ Good  | Zero external runtime dependencies; only `node:*` built-ins used.              |
 
 ---
 
-## 3. Implementation Tasks
+## Priority 1 — Consumer Experience
 
-### Task 1 – Reusable Setup Action (`.github/actions/setup-birdcc/action.yml`)
+### 1.1 Auto-detect changed BIRD files via a dedicated output
 
-**Purpose:** Single source of truth for all workflow environment initialization.
+**Problem:** Workflows that only want to check changed `.conf`/`.bird` files must re-implement `git diff` logic. This is error-prone and duplicated across repos.
 
-**Implementation Steps:**
-
-1. Create the directory `.github/actions/setup-birdcc`.
-2. Write the `action.yml` composite action with the following steps:
-   - Harden Runner (optional).
-   - Checkout with `fetch-depth: 0` (required for Turbo `affected`).
-   - Setup pnpm (version pinned to `10.18.3`).
-   - Setup Node.js (default `22`, cache `pnpm`).
-   - Install dependencies with `pnpm install --frozen-lockfile --prefer-offline`.
-   - Restore/save Turbo cache using `actions/cache@v4` (path: `.turbo`).
-   - **Install BIRD2 binary** for `bird -p` validation (see License Note below).
-
-**License Note (BIRD Binary Installation):**  
-Installing and invoking `bird` as an external process is **fully compliant** with GPL. We are not redistributing or linking BIRD code. The user/CI provides the binary.
-
-**Example snippet for BIRD installation (Ubuntu runner):**
+**Proposal:** Add a new output `changed-config-files` (newline-separated) computed from `git diff --name-only` when `fetch-depth: "0"` is set. Consumers can reference it directly:
 
 ```yaml
-- name: Install BIRD2
-  shell: bash
-  run: |
-    sudo apt-get update
-    sudo apt-get install -y bird2
-    bird --version
+- run: |
+    for f in ${{ steps.setup.outputs.changed-config-files }}; do
+      pnpm dlx @birdcc/cli@latest birdcc lint "$f" --bird
+    done
 ```
 
-### Task 2 – Main CI Workflow (`.github/workflows/ci.yml`)
+**Implementation:** New script `scripts/resolve-changed-files.mjs`; new step after checkout in `action.yml`.
 
-**Trigger:** `push` to `main`, `pull_request` to `main`.
+---
+
+### 1.2 Expose `birdcc-version` as an output
+
+**Problem:** Workflows that pin `@birdcc/cli@latest` cannot easily log or assert the exact birdcc version that ran.
+
+**Proposal:** After `pnpm dlx @birdcc/cli@latest birdcc --version` (or a resolution step), emit a `birdcc-version` output for downstream steps to log or create cache keys from.
+
+---
+
+### 1.3 Add a `birdcc-version` input to pin the CLI version
+
+**Problem:** Using `@latest` in consumer `pnpm dlx` calls can cause unexpected breakage when a new alpha is published.
+
+**Proposal:** Add an optional `birdcc-version` input (default: `latest`). When set, the action emits the pinned version as part of the Node cache key and exposes it as an output:
+
+```yaml
+- uses: bird-chinese-community/setup-birdcc@v1
+  with:
+    birdcc-version: "0.1.0-alpha.5"
+```
+
+---
+
+### 1.4 Windows / macOS runner support
+
+**Problem:** `install-bird.mjs` calls `sudo apt-get` which is Linux-only. Non-Linux runners silently skip BIRD installation with no clear diagnostic.
+
+**Proposal:**
+
+- Detect `runner.os` via the `RUNNER_OS` env variable in the script.
+- On non-Linux runners, emit a `::warning::` annotation and set `bird-bin` to empty.
+- Document clearly in README that BIRD installation only works on Linux runners.
+
+---
+
+## Priority 2 — Technical Hardening
+
+### 2.1 Reproducible Node.js cache key for `pnpm dlx`
+
+**Problem:** `pnpm dlx @birdcc/cli@latest` always fetches from the registry; there is no cache layer for config-only repos that skip `install-dependencies`.
+
+**Proposal:** When `install-dependencies: "false"`, add an optional `cache-pnpm-dlx: "true"` input that caches the pnpm store at `~/.local/share/pnpm/store` with a weekly key, dramatically reducing cold-start time for config repos.
+
+---
+
+### 2.2 BIRD installation idempotency check
+
+**Problem:** If the action runs twice in the same job (e.g., reused container via `act`), `apt-get install` is called twice.
+
+**Proposal:** In `install-bird.mjs`, check if the binary already exists at known paths before running apt commands. Skip installation and set outputs from the found binary.
+
+---
+
+### 2.3 Strict SHA pinning for third-party actions
+
+**Problem:** `action.yml` uses floating tags for `actions/checkout@v4`, `actions/setup-node@v4`, `pnpm/action-setup@v4`, `actions/cache@v4`, and `dtolnay/rust-toolchain@master`. These can break silently.
+
+**Proposal:** Pin all third-party action references to full SHA digests and add a `dependabot.yml` entry to auto-update them:
+
+```yaml
+# .github/dependabot.yml (already exists — add group)
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+```
+
+---
+
+### 2.4 Submodule initialization timeout guard
+
+**Problem:** `sync-submodules.mjs` has no timeout; a large or slow submodule can block the job indefinitely.
+
+**Proposal:** Add a `submodule-timeout` input (default: `60`, seconds). Pass it as `--depth-timeout` or implement a `AbortController`-based timeout in the script.
+
+---
+
+## Priority 3 — Ecosystem Integration
+
+### 3.1 Publish to GitHub Actions Marketplace
+
+**Problem:** The action is not yet listed on the GitHub Marketplace, reducing discoverability.
 
 **Steps:**
 
-1. Use the reusable action: `uses: ./.github/actions/setup-birdcc`.
-2. Run Turbo pipeline on **affected packages only**:
-   ```bash
-   pnpm turbo run lint typecheck test build format \
-     --continue \
-     --filter="...[origin/${{ github.base_ref || 'main' }}]"
+1. Ensure `action.yml` has `branding.icon` and `branding.color` fields:
+   ```yaml
+   branding:
+     icon: check-circle
+     color: blue
    ```
-3. (Optional) Upload coverage to Codecov.
-
-### Task 3 – Release Workflow (`.github/workflows/release.yml`)
-
-**Trigger:** `push` to `main` branch.
-
-**Permissions:** `contents: write`, `id-token: write` (for npm provenance).
-
-**Steps:**
-
-1. Use reusable `setup-birdcc`.
-2. Run Changesets action:
-   - `version`: `pnpm changeset version`
-   - `publish`: `pnpm run release:publish`
-3. Provide secrets: `GITHUB_TOKEN` and `NPM_TOKEN` (must be added to GitHub Secrets).
-
-### Task 4 – Workflow Linting (`.github/workflows/lint-workflows.yml`)
-
-**Trigger:** `pull_request` with changes to `.github/workflows/**`, plus `workflow_dispatch`.
-
-**Steps:**
-
-1. Checkout.
-2. Run `reviewdog/action-actionlint@v1` with `reporter: github-pr-review` and `fail-on-error: true`.
-
-### Task 5 – Local Development Documentation
-
-**Objective:** Enable developers (and AI agents) to run CI locally with `act` and validate workflow syntax with `actionlint`.
-
-**Documentation Additions to `README.md`:**
-
-- Installation commands for `act` and `actionlint`.
-- Example commands:
-
-  ```bash
-  # Lint workflows
-  actionlint .github/workflows/*.yml
-
-  # Run full CI locally (reuse containers for speed)
-  act -j ci --reuse
-
-  # Run a specific job
-  act -j release --reuse
-  ```
-
-- (Optional) Add VS Code tasks in `.vscode/tasks.json` for one‑click local CI.
-
-### Task 6 – Security & Best Practices (Optional but Recommended)
-
-- Integrate `step-security/harden-runner` in the reusable action.
-- Consider adding `dorny/paths-filter` if fine‑grained path filtering is needed (Turbo already handles it well).
+2. Create a GitHub Release with a proper semver tag (e.g., `v1.0.0`).
+3. Follow [GitHub Marketplace publishing docs](https://docs.github.com/en/actions/sharing-automations/creating-actions/publishing-actions-in-github-marketplace).
 
 ---
 
-## 4. Acceptance Criteria / Checklist
+### 3.2 Integration test against a real BIRD config repository
 
-- [ ] **`setup-birdcc` action created** and correctly referenced by all workflows.
-- [ ] **`ci.yml` passes** on a PR that modifies a package (verify affected filtering).
-- [ ] **`release.yml` creates a Release PR** when a changeset is pushed to `main`.
-- [ ] **`lint-workflows.yml` runs** and passes on PRs touching workflow files.
-- [ ] **BIRD binary is installed** in CI and `bird -p` validation works (if integrated into lint/test).
-- [ ] **`act -j ci` runs successfully locally** (after `act` is installed).
-- [ ] **`actionlint` returns no errors** for all workflow YAML files.
-- [ ] **`README.md` updated** with local development instructions for `act` and `actionlint`.
-- [ ] **Secrets configured:** `NPM_TOKEN` added to GitHub repository secrets.
+**Problem:** Smoke tests use `bird.conf` from the runner's default install, not a real user config. Edge cases (includes, `%include`, large configs) are untested.
+
+**Proposal:** Add a smoke job in `ci.yml` that clones a known public BIRD config repository (e.g., a sample from `bird-chinese-community`) and runs `birdcc lint` + `bird -p -c` against it.
 
 ---
 
-## 5. Notes for Codex
+### 3.3 Provide a `bird-config-repo` project template
 
-- **File Structure:** Please create or modify exactly the files listed in Section 3.
-- **Secrets:** Do **not** attempt to create or modify secrets programmatically; only output instructions for manual setup.
-- **Package Manager:** Always use `pnpm`; do not generate `npm` or `yarn` commands.
-- **Turbo Filter:** The `--filter="...[origin/main]"` syntax is **intentional** and required for correct affected detection.
-- **License Compliance:** The BIRD installation step is **explicitly allowed** under GPL. No license conflict exists.
-- **Testing Locally:** After implementation, you (Codex) may suggest the user run `act` to validate, but cannot execute it directly.
+**Problem:** New users still need to create a `bird.config.json` (or `birdcc.config.json`) and copy a workflow file manually.
 
----
+**Proposal:** Create a GitHub repository template (`bird-chinese-community/bird-config-template`) with:
 
-## 6. Expected Deliverables from Codex
-
-1. Four YAML files as described above (fully commented, ready to copy/paste).
-2. A proposed diff for `README.md` (or a new section) covering local CI tooling.
-3. A concise summary of any manual steps the user must perform (e.g., adding `NPM_TOKEN` secret).
+- A minimal `bird.conf` starter
+- A `bird.config.json` with default settings
+- A pre-configured `.github/workflows/ci.yml` using `setup-birdcc@v1`
+- A `README.md` explaining the template
 
 ---
 
-## 附录
+### 3.4 Document `BIRD_BIN` environment variable contract
 
-### Multi-Stage Dockerfile Best Practices
+**Problem:** The `BIRD_BIN` environment variable is used by `@birdcc/cli` but its contract (when it is respected, fallback behavior when absent) is not documented in `setup-birdcc`.
 
-See `.agents/skills/multi-stage-dockerfile/SKILL.md` for detailed guidelines on creating efficient multi-stage Dockerfiles.
+**Proposal:** Add a dedicated section in README explaining the `BIRD_BIN` → `bird-bin` output → `@birdcc/cli` resolution chain, including what happens when the variable is absent (CLI falls back to `PATH` lookup).
 
-### GitHub Actions Quick Reference
+---
 
-See `.agents/skills/github-actions/` for comprehensive examples and best practices on GitHub Actions workflows, reusable actions, and notifications.
+## Priority 4 — Developer Experience (Action Maintainer)
 
-### Docker Expert Quick Reference
+### 4.1 Add `act` configuration file (`.actrc`)
 
-See `.agents/skills/docker-expert/` for common Dockerfile patterns, commands, and optimization techniques.
+**Problem:** `act` invocation flags (`--container-architecture`, `-P`) must be re-typed each time.
 
-### Install BIRD Binary via CZNIC apt repository in CI
+**Proposal:** Add a `.actrc` at the repository root:
 
-- Ubuntu + BIRD3 (latest stable)
-
-```sh
-#!/bin/bash
-
-echo "[Init] Install the BIRD3 from CZNIC apt repository"
-
-apt update
-
-apt -y install apt-transport-https ca-certificates wget curl lsb-release
-
-wget -O /usr/share/keyrings/cznic-labs-pkg.gpg https://pkg.labs.nic.cz/gpg
-
-echo "deb [signed-by=/usr/share/keyrings/cznic-labs-pkg.gpg] https://pkg.labs.nic.cz/bird3 $(lsb_release -sc) main" | tee /etc/apt/sources.list.d/cznic-labs-bird3.list
-
-echo "+ apt update"
-apt update
-
-echo "+ apt install bird3"
-apt install bird3
-
-echo "[Done]"
+```
+-P ubuntu-latest=catthehacker/ubuntu:act-latest
+--container-architecture linux/amd64
 ```
 
-- Ubuntu + BIRD2 (latest stable)
+This lets maintainers run `act -j smoke-basic` without extra flags.
 
-```sh
-#!/bin/bash
+---
 
-echo "[Init] Install the BIRD2 from CZNIC apt repository"
+### 4.2 Add VS Code task definitions
 
-apt update
+**Problem:** Running `pnpm test`, `actionlint`, or `act` requires switching to the terminal and recalling the exact command.
 
-apt -y install apt-transport-https ca-certificates wget curl lsb-release
+**Proposal:** Add `.vscode/tasks.json` with tasks:
 
-wget -O /usr/share/keyrings/cznic-labs-pkg.gpg https://pkg.labs.nic.cz/gpg
+- `Run tests` → `pnpm test`
+- `Lint workflows` → `actionlint .github/workflows/*.yml examples/*.yml`
+- `Act: smoke-basic` → `act -j smoke-basic --reuse`
+- `Release dry-run` → `pnpm run release:dry-run -- --tag v1.0.0`
 
-echo "deb [signed-by=/usr/share/keyrings/cznic-labs-pkg.gpg] https://pkg.labs.nic.cz/bird2 $(lsb_release -sc) main" | tee /etc/apt/sources.list.d/cznic-labs-bird2.list
+---
 
-echo "+ apt update"
-apt update
+### 4.3 Add `CONTRIBUTING.md`
 
-echo "+ apt install bird2"
-apt install bird2
+**Proposal:** Create a `CONTRIBUTING.md` covering:
 
-echo "[Done]"
-```
+- Scope: what the action should and should not do (keep thin, logic in scripts)
+- Adding a new input: checklist (action.yml → validate-inputs.mjs → test → README)
+- Testing locally with `act`
+- Release process step-by-step
 
-**End of PLAN.md**
+---
+
+## Acceptance Checklist for Next Milestone
+
+- [ ] `changed-config-files` output implemented and documented
+- [ ] `birdcc-version` input and output added
+- [ ] Non-Linux runner warning added to `install-bird.mjs`
+- [ ] Third-party action SHA pinning completed in `action.yml`
+- [ ] `branding` fields added to `action.yml`
+- [ ] Published to GitHub Actions Marketplace
+- [ ] `.actrc` added to repository root
+- [ ] `.vscode/tasks.json` added
+- [ ] `CONTRIBUTING.md` created
+- [ ] Integration smoke test against a real config repository passing in CI
+
+---
+
+## Manual Steps Required
+
+| Step                        | Owner      | Details                                                                          |
+| --------------------------- | ---------- | -------------------------------------------------------------------------------- |
+| Publish to Marketplace      | Maintainer | Create GitHub Release v1.0.0, then submit via GitHub UI.                         |
+| Add `NPM_TOKEN` secret      | Maintainer | Not needed for this action (no npm publish), but needed for BIRD-LSP release CI. |
+| Create config repo template | Maintainer | Create `bird-chinese-community/bird-config-template` repository on GitHub.       |
