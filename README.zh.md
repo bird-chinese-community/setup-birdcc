@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🐦 setup-birdcc
+# 🕊️ setup-birdcc
 
 </div>
 
