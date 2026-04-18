@@ -1,0 +1,28 @@
+name: BIRD2 and BIRD3 Parse Smoke
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  parse:
+    name: BIRD${{ matrix.bird-version }} parse
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        bird-version: ["2", "3"]
+    steps:
+      - name: Set up BIRD ${{ matrix.bird-version }}
+        id: setup
+        uses: bird-chinese-community/setup-birdcc@v1
+        with:
+          install-dependencies: "false"
+          cache-turbo: "false"
+          bird-version: ${{ matrix.bird-version }}
+
+      - name: Validate config with the installed BIRD binary
+        run: '"${{ steps.setup.outputs.bird-bin }}" -p -c bird.conf'

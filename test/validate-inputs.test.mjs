@@ -8,9 +8,18 @@ import {
 
 test("parsePathList accepts newline and comma separated paths", () => {
   assert.deepEqual(
-    parsePathList("refer/BIRD-source-code, refer/BIRD2-vim-grammar\nrefer/vscode-bird2"),
-    ["refer/BIRD-source-code", "refer/BIRD2-vim-grammar", "refer/vscode-bird2"],
+    parsePathList(
+      "vendor/route-server-configs, vendor/lab-bird-configs\nconfigs/shared",
+    ),
+    ["vendor/route-server-configs", "vendor/lab-bird-configs", "configs/shared"],
   );
+});
+
+test("parsePathList ignores blank comma and newline entries", () => {
+  assert.deepEqual(parsePathList("\n configs/prod , , configs/lab \n"), [
+    "configs/prod",
+    "configs/lab",
+  ]);
 });
 
 test("validateConfig accepts the documented default inputs", () => {
@@ -61,5 +70,49 @@ test("validateConfig rejects invalid enum values and unsafe submodule paths", ()
         submodulePaths: "../outside",
       }),
     /submodule-paths/,
+  );
+});
+
+test("validateConfig rejects invalid booleans and unsafe directories", () => {
+  assert.throws(
+    () =>
+      validateConfig({
+        installDependencies: "yes",
+      }),
+    /install-dependencies/,
+  );
+
+  assert.throws(
+    () =>
+      validateConfig({
+        workingDirectory: "/tmp/configs",
+      }),
+    /working-directory/,
+  );
+
+  assert.throws(
+    () =>
+      validateConfig({
+        turboCachePath: "-cache",
+      }),
+    /turbo-cache-path/,
+  );
+});
+
+test("validateConfig rejects non-integer fetch depth and multiline shell inputs", () => {
+  assert.throws(
+    () =>
+      validateConfig({
+        fetchDepth: "-1",
+      }),
+    /fetch-depth/,
+  );
+
+  assert.throws(
+    () =>
+      validateConfig({
+        installCommand: "pnpm install\npnpm test",
+      }),
+    /install-command/,
   );
 });

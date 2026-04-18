@@ -1,177 +1,195 @@
 # setup-birdcc
 
-Reusable GitHub Action for BIRDCC projects.
+Set up GitHub Actions runners for BIRD config automation.
 
-`setup-birdcc` is a composite action that prepares a pnpm/Turborepo workspace for CI and release workflows. It is designed for `bird-chinese-community/BIRD-LSP`, but can be reused by other BIRDCC repositories that need the same Node.js, pnpm, Turbo cache, Rust, and BIRD binary setup.
+Use this action when a repository needs CI to lint, format-check, or parse-check BIRD configuration files. It installs Node.js, pnpm, and optionally BIRD2/BIRD3 so your workflow can run `birdcc` and `bird -p -c` without repeating runner setup boilerplate.
 
-## Features
+```yaml
+steps:
+  - name: Set up BIRD config tooling
+    id: setup
+    uses: bird-chinese-community/setup-birdcc@v1
+    with:
+      install-dependencies: "false"
+      cache-turbo: "false"
 
-- Checkout with full history by default for Turbo affected filters.
-- Install pinned pnpm and Node.js versions.
-- Restore/save `.turbo` cache with `actions/cache`.
-- Optionally initialize selected Git submodules.
-- Optionally install Rust with `rustfmt`, `clippy`, and `wasm32-unknown-unknown`.
-- Optionally install BIRD2 or BIRD3 for `bird -p -c` validation.
-- Uses small Node.js ESM scripts for non-trivial logic instead of large bash blocks.
+  - name: Lint and parse BIRD config
+    run: pnpm dlx @birdcc/cli@latest birdcc lint bird.conf --bird
+    env:
+      BIRD_BIN: ${{ steps.setup.outputs.bird-bin }}
+```
+
+For action maintenance, local `act` notes, and release dry runs, see [DEVELOP.md](./DEVELOP.md).
+
+## What This Action Does
+
+`setup-birdcc` prepares the runner. It does not decide which config files are valid for your network and it does not run hidden lint commands for you.
+
+| Capability | Default | Typical config-repo setting |
+| --- | --- | --- |
+| Checkout | on | Keep on unless you already checked out the repo. |
+| Node.js | `22` | Needed for `pnpm dlx @birdcc/cli`. |
+| pnpm | `10.18.3` | Needed for `pnpm dlx` or workspace installs. |
+| pnpm install | on | Set `install-dependencies: "false"` for config-only repos. |
+| Turbo cache | on | Set `cache-turbo: "false"` outside Turborepo projects. |
+| Selected submodules | off | Use `submodule-paths` for config repos stored as Git submodules. |
+| Rust toolchain | off | Usually not needed for config-only repos. |
+| BIRD binary | BIRD2 on | Used by `birdcc lint --bird` or direct `bird -p -c`. |
+| Harden runner | off | Opt in only after checking network egress needs. |
 
 ## Quick Start
 
+### Lint And Parse A Single Config
+
 ```yaml
-name: CI
+name: BIRD Config Lint
 
 on:
   pull_request:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
-  ci:
+  lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: bird-chinese-community/setup-birdcc@v1
+      - name: Set up BIRD config tooling
+        id: setup
+        uses: bird-chinese-community/setup-birdcc@v1
+        with:
+          install-dependencies: "false"
+          cache-turbo: "false"
 
-      - run: pnpm turbo run lint typecheck test build format --continue
+      - name: Lint and validate the main config
+        run: pnpm dlx @birdcc/cli@latest birdcc lint bird.conf --bird
+        env:
+          BIRD_BIN: ${{ steps.setup.outputs.bird-bin }}
 ```
 
-## BIRD-LSP Example
+### Check Formatting
 
 ```yaml
-jobs:
-  ci:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: bird-chinese-community/setup-birdcc@v1
-        with:
-          install-rust: "true"
-          submodule-paths: |
-            refer/BIRD-source-code
-            refer/BIRD-tm-language-grammar
-            refer/BIRD2-vim-grammar
+- name: Set up BIRD config tooling
+  uses: bird-chinese-community/setup-birdcc@v1
+  with:
+    install-dependencies: "false"
+    cache-turbo: "false"
+    install-bird: "false"
 
-      - name: Run affected Turbo tasks
-        run: pnpm turbo run lint typecheck test build format --continue --filter="...[origin/${{ github.base_ref || 'main' }}]"
+- name: Check formatting
+  run: pnpm dlx @birdcc/cli@latest birdcc fmt bird.conf --check
 ```
 
-See also:
+### Direct BIRD Parse Check
 
-- [`examples/bird-lsp-ci.yml`](./examples/bird-lsp-ci.yml)
-- [`examples/bird-lsp-release.yml`](./examples/bird-lsp-release.yml)
+```yaml
+- name: Set up BIRD3
+  id: setup
+  uses: bird-chinese-community/setup-birdcc@v1
+  with:
+    install-dependencies: "false"
+    cache-turbo: "false"
+    bird-version: "3"
+
+- name: Parse config with BIRD
+  run: '"${{ steps.setup.outputs.bird-bin }}" -p -c bird.conf'
+```
+
+More copyable workflows live in [examples/](./examples/).
+
+## Version Selection
+
+Choose the ref based on how tightly you need to pin your supply chain.
+
+| Ref style | Example | Use when |
+| --- | --- | --- |
+| Major tag | `bird-chinese-community/setup-birdcc@v1` | Recommended default. Receives compatible fixes. |
+| Exact semver tag | `bird-chinese-community/setup-birdcc@v1.0.0` | You want reproducible release behavior with a readable tag. |
+| Full commit SHA | `bird-chinese-community/setup-birdcc@0123456789abcdef0123456789abcdef01234567` | Highest pinning. Use with Dependabot or a scheduled review. |
+| Branch | `bird-chinese-community/setup-birdcc@main` | Only for testing action changes before release. |
+
+For protected production config repositories, pin to a full commit SHA after auditing the release. For normal CI, `@v1` is the friendlier default.
+
+## BIRD Version Guide
+
+| Input | Result |
+| --- | --- |
+| `bird-version: "2"` | Installs Ubuntu's `bird2` package by default. |
+| `bird-version: "3"` | Installs BIRD3 from the CZNIC apt repository by default. |
+| `bird-package-source: "ubuntu"` with BIRD2 | Forces Ubuntu apt packages. |
+| `bird-package-source: "cznic"` | Forces the CZNIC apt repository. |
+| `bird-version: "3"` plus `bird-package-source: "ubuntu"` | Rejected, because Ubuntu does not provide BIRD3 through that source. |
+
+This action installs BIRD on the runner only. It does not vendor, commit, or redistribute BIRD source code or binaries.
 
 ## Inputs
 
-| Input                         | Default                                           | Description                                                                |
-| ----------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------- |
-| `checkout`                    | `true`                                            | Run `actions/checkout@v4`.                                                 |
-| `fetch-depth`                 | `0`                                               | Checkout fetch depth. Keep `0` for Turbo affected detection.               |
-| `submodules`                  | `false`                                           | Value passed to `actions/checkout`; supports `false`, `true`, `recursive`. |
-| `submodule-paths`             | empty                                             | Newline or comma separated submodule paths initialized with depth `1`.     |
-| `node-version`                | `22`                                              | Node.js version.                                                           |
-| `pnpm-version`                | `10.18.3`                                         | pnpm version.                                                              |
-| `registry-url`                | `https://registry.npmjs.org`                      | npm registry URL for `actions/setup-node`.                                 |
-| `working-directory`           | `.`                                               | Directory for dependency installation and Turbo cache path resolution.     |
-| `install-dependencies`        | `true`                                            | Run the install command.                                                   |
-| `install-command`             | `pnpm install --frozen-lockfile --prefer-offline` | Dependency installation command.                                           |
-| `cache-turbo`                 | `true`                                            | Restore/save Turbo cache.                                                  |
-| `turbo-cache-path`            | `.turbo`                                          | Turbo cache path relative to `working-directory`.                          |
-| `install-rust`                | `false`                                           | Install Rust toolchain.                                                    |
-| `rust-toolchain`              | `stable`                                          | Rust toolchain passed to `dtolnay/rust-toolchain`.                         |
-| `rust-components`             | `rustfmt,clippy`                                  | Rust components to install.                                                |
-| `rust-targets`                | `wasm32-unknown-unknown`                          | Rust targets to install.                                                   |
-| `install-bird`                | `true`                                            | Install BIRD for `bird -p` validation.                                     |
-| `bird-version`                | `2`                                               | BIRD major version, `2` or `3`.                                            |
-| `bird-package-source`         | `auto`                                            | Package source: `auto`, `ubuntu`, or `cznic`.                              |
-| `harden-runner`               | `false`                                           | Enable `step-security/harden-runner`.                                      |
-| `harden-runner-egress-policy` | `audit`                                           | Egress policy passed to harden-runner.                                     |
+| Input | Default | Description |
+| --- | --- | --- |
+| `checkout` | `true` | Run `actions/checkout@v4`. |
+| `fetch-depth` | `0` | Checkout fetch depth. Keep `0` for changed-file or affected-history workflows. |
+| `submodules` | `false` | Passed to checkout. Use `false`, `true`, or `recursive`. |
+| `submodule-paths` | empty | Newline or comma separated paths to initialize with `git submodule update --init --depth 1`. |
+| `node-version` | `22` | Node.js version. |
+| `pnpm-version` | `10.18.3` | pnpm version. |
+| `registry-url` | `https://registry.npmjs.org` | npm registry for `actions/setup-node`. |
+| `working-directory` | `.` | Directory for dependency install and cache path resolution. |
+| `install-dependencies` | `true` | Run `install-command`. Use `false` for config-only repositories that run `pnpm dlx`. |
+| `install-command` | `pnpm install --frozen-lockfile --prefer-offline` | Dependency installation command. |
+| `cache-turbo` | `true` | Restore/save Turbo cache. Use `false` outside Turborepo projects. |
+| `turbo-cache-path` | `.turbo` | Turbo cache path relative to `working-directory`. |
+| `install-rust` | `false` | Install Rust toolchain. |
+| `rust-toolchain` | `stable` | Rust toolchain passed to `dtolnay/rust-toolchain`. |
+| `rust-components` | `rustfmt,clippy` | Comma separated Rust components. |
+| `rust-targets` | `wasm32-unknown-unknown` | Comma separated Rust targets. |
+| `install-bird` | `true` | Install BIRD for `birdcc lint --bird` or direct parse checks. |
+| `bird-version` | `2` | BIRD major version: `2` or `3`. |
+| `bird-package-source` | `auto` | `auto`, `ubuntu`, or `cznic`. |
+| `harden-runner` | `false` | Enable `step-security/harden-runner`. |
+| `harden-runner-egress-policy` | `audit` | `audit` or `block`. |
 
 ## Outputs
 
-| Output            | Description                                 |
-| ----------------- | ------------------------------------------- |
-| `bird-bin`        | Path to the installed BIRD binary.          |
-| `bird-version`    | Output from `bird --version`.               |
-| `turbo-cache-hit` | Exact cache hit value from `actions/cache`. |
+| Output | Description |
+| --- | --- |
+| `bird-bin` | Path to installed BIRD binary. Empty when `install-bird: "false"`. |
+| `bird-version` | `bird --version` output. Empty when `install-bird: "false"`. |
+| `turbo-cache-hit` | Exact Turbo cache hit from `actions/cache`. |
 
-## BIRD Installation
+## Real-World Patterns
 
-`bird-version: "2"` with `bird-package-source: auto` installs Ubuntu's `bird2` package.
-
-`bird-version: "3"` with `bird-package-source: auto` installs BIRD3 from the CZNIC apt repository. BIRD3 is not available from the Ubuntu package source, so `bird-version: "3"` with `bird-package-source: ubuntu` is rejected.
-
-This action does not vendor, commit, or redistribute BIRD binaries. It installs BIRD on the GitHub runner through apt and invokes it as an external process. That keeps this MIT-licensed action independent from BIRD's GPL distribution requirements while still allowing CI to run `bird -p -c`.
-
-## Release Workflow Example
-
-```yaml
-jobs:
-  release:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-      id-token: write
-    steps:
-      - uses: bird-chinese-community/setup-birdcc@v1
-        with:
-          install-rust: "true"
-          registry-url: https://registry.npmjs.org
-
-      - uses: changesets/action@v1
-        with:
-          version: pnpm changeset version
-          publish: pnpm run release:publish
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_PROVENANCE: "true"
-```
-
-## Local Development
-
-Run script tests:
-
-```bash
-pnpm test
-```
-
-Lint workflows locally:
-
-```bash
-actionlint .github/workflows/*.yml
-```
-
-Run selected GitHub Actions jobs locally with `act`:
-
-```bash
-act -j smoke-basic --reuse \
-  --container-architecture linux/amd64 \
-  -P ubuntu-latest=catthehacker/ubuntu:act-latest
-
-act -j smoke-bird --reuse \
-  --container-architecture linux/amd64 \
-  -P ubuntu-latest=catthehacker/ubuntu:act-latest
-```
-
-Install local tooling on macOS:
-
-```bash
-brew install act actionlint
-```
-
-On Apple Silicon, the Rust smoke job may fail under `act` because Rust tools run through emulation in the local container. Treat GitHub-hosted `ubuntu-latest` as the source of truth for the Rust matrix.
-
-## Publishing
-
-Create a semantic version tag and push it:
-
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-Consumers should reference a major tag such as:
+Use `submodule-paths` when production configs live in one or more private or shared Git submodules:
 
 ```yaml
 - uses: bird-chinese-community/setup-birdcc@v1
+  with:
+    install-dependencies: "false"
+    cache-turbo: "false"
+    submodule-paths: |
+      vendor/route-server-configs
+      vendor/lab-bird-configs
 ```
 
-Keep the `v1` tag updated to the latest compatible `v1.x.x` release.
+Use a BIRD2/BIRD3 matrix when you maintain migration-safe configs:
+
+```yaml
+strategy:
+  fail-fast: false
+  matrix:
+    bird-version: ["2", "3"]
+steps:
+  - id: setup
+    uses: bird-chinese-community/setup-birdcc@v1
+    with:
+      install-dependencies: "false"
+      cache-turbo: "false"
+      bird-version: ${{ matrix.bird-version }}
+  - run: '"${{ steps.setup.outputs.bird-bin }}" -p -c bird.conf'
+```
+
+## License Notes
+
+`setup-birdcc` is released under the MIT License. BIRD and `@birdcc/cli` have their own licenses. This action installs and invokes external tools on the runner; it does not embed their source code or binaries.

@@ -24,7 +24,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - run: node --check scripts/install-bird.mjs
+      - run: node --check scripts/release-dry-run.mjs
+      - run: node --check scripts/sync-submodules.mjs
+      - run: node --check scripts/validate-inputs.mjs
       - run: node --test test/*.test.mjs
+      - run: node scripts/release-dry-run.mjs --dry-run --tag v1.0.0
 
   smoke-basic:
     name: Basic action smoke

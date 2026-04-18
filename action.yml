@@ -1,5 +1,5 @@
 name: setup-birdcc
-description: Set up BIRDCC GitHub Actions jobs with Node.js, pnpm, Turbo cache, Rust, and BIRD.
+description: Set up GitHub Actions jobs for linting, formatting, and parse-checking BIRD configs.
 
 inputs:
   checkout:

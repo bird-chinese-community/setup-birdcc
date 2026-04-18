@@ -1,0 +1,27 @@
+name: SHA-pinned BIRD Config Lint
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      # Replace this example SHA with the audited commit behind a setup-birdcc release.
+      - name: Set up BIRD config tooling
+        id: setup
+        uses: bird-chinese-community/setup-birdcc@0123456789abcdef0123456789abcdef01234567
+        with:
+          install-dependencies: "false"
+          cache-turbo: "false"
+          bird-version: "2"
+
+      - name: Lint and parse the main config
+        run: pnpm dlx @birdcc/cli@latest birdcc lint bird.conf --bird
+        env:
+          BIRD_BIN: ${{ steps.setup.outputs.bird-bin }}

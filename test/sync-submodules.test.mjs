@@ -20,3 +20,37 @@ test("buildSubmoduleCommands creates sync and update commands per path", () => {
     ],
   ]);
 });
+
+test("buildSubmoduleCommands preserves path order for multiple config submodules", () => {
+  assert.deepEqual(
+    buildSubmoduleCommands(["vendor/route-server-configs", "vendor/lab-bird-configs"]),
+    [
+      ["git", ["submodule", "sync", "--", "vendor/route-server-configs"]],
+      [
+        "git",
+        [
+          "submodule",
+          "update",
+          "--init",
+          "--depth",
+          "1",
+          "--",
+          "vendor/route-server-configs",
+        ],
+      ],
+      ["git", ["submodule", "sync", "--", "vendor/lab-bird-configs"]],
+      [
+        "git",
+        [
+          "submodule",
+          "update",
+          "--init",
+          "--depth",
+          "1",
+          "--",
+          "vendor/lab-bird-configs",
+        ],
+      ],
+    ],
+  );
+});

@@ -27,6 +27,18 @@ test("resolveInstallPlan uses CZNIC repository for BIRD3 auto installs", () => {
   assert.match(plan.repository, /https:\/\/pkg\.labs\.nic\.cz\/bird3 noble main/);
 });
 
+test("resolveInstallPlan can force the CZNIC repository for BIRD2", () => {
+  const plan = resolveInstallPlan({
+    birdVersion: "2",
+    birdPackageSource: "cznic",
+    codename: "noble",
+  });
+
+  assert.equal(plan.packageName, "bird2");
+  assert.equal(plan.resolvedSource, "cznic");
+  assert.match(plan.repository, /https:\/\/pkg\.labs\.nic\.cz\/bird2 noble main/);
+});
+
 test("resolveInstallPlan rejects Ubuntu source for BIRD3", () => {
   assert.throws(
     () =>

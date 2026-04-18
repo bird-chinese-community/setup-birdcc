@@ -1,0 +1,31 @@
+name: BIRD Configs From Submodules
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  config-submodules:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up tooling and selected config submodules
+        id: setup
+        uses: bird-chinese-community/setup-birdcc@v1
+        with:
+          install-dependencies: "false"
+          cache-turbo: "false"
+          submodule-paths: |
+            vendor/route-server-configs
+            vendor/lab-bird-configs
+
+      - name: Lint submodule configs
+        shell: bash
+        run: |
+          while IFS= read -r -d '' file; do
+            pnpm dlx @birdcc/cli@latest birdcc lint "$file" --bird
+          done < <(find vendor -type f \( -name "*.conf" -o -name "*.bird" \) -print0)
+        env:
+          BIRD_BIN: ${{ steps.setup.outputs.bird-bin }}
