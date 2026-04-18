@@ -1,0 +1,208 @@
+name: setup-birdcc
+description: Set up BIRDCC GitHub Actions jobs with Node.js, pnpm, Turbo cache, Rust, and BIRD.
+
+inputs:
+  checkout:
+    description: Run actions/checkout before setting up the toolchain.
+    required: false
+    default: "true"
+  fetch-depth:
+    description: Git fetch depth for checkout. Use 0 for Turbo affected detection.
+    required: false
+    default: "0"
+  submodules:
+    description: Checkout submodules mode passed to actions/checkout.
+    required: false
+    default: "false"
+  submodule-paths:
+    description: Newline or comma separated submodule paths to initialize with depth 1.
+    required: false
+    default: ""
+  node-version:
+    description: Node.js version to install.
+    required: false
+    default: "22"
+  pnpm-version:
+    description: pnpm version to install.
+    required: false
+    default: "10.18.3"
+  registry-url:
+    description: npm registry URL for actions/setup-node.
+    required: false
+    default: "https://registry.npmjs.org"
+  working-directory:
+    description: Directory where dependency installation should run.
+    required: false
+    default: "."
+  install-dependencies:
+    description: Install pnpm dependencies.
+    required: false
+    default: "true"
+  install-command:
+    description: Dependency installation command.
+    required: false
+    default: "pnpm install --frozen-lockfile --prefer-offline"
+  cache-turbo:
+    description: Restore and save the Turbo cache.
+    required: false
+    default: "true"
+  turbo-cache-path:
+    description: Turbo cache path relative to working-directory.
+    required: false
+    default: ".turbo"
+  install-rust:
+    description: Install a Rust toolchain for packages such as dprint-plugin-bird.
+    required: false
+    default: "false"
+  rust-toolchain:
+    description: Rust toolchain to install.
+    required: false
+    default: "stable"
+  rust-components:
+    description: Comma separated Rust components to install.
+    required: false
+    default: "rustfmt,clippy"
+  rust-targets:
+    description: Comma separated Rust targets to install.
+    required: false
+    default: "wasm32-unknown-unknown"
+  install-bird:
+    description: Install a BIRD binary for bird -p validation.
+    required: false
+    default: "true"
+  bird-version:
+    description: BIRD major version to install. Supported values are 2 and 3.
+    required: false
+    default: "2"
+  bird-package-source:
+    description: Package source for BIRD. Supported values are auto, ubuntu, and cznic.
+    required: false
+    default: "auto"
+  harden-runner:
+    description: Enable step-security/harden-runner.
+    required: false
+    default: "false"
+  harden-runner-egress-policy:
+    description: Egress policy passed to harden-runner.
+    required: false
+    default: "audit"
+
+outputs:
+  bird-bin:
+    description: Path to the installed BIRD binary.
+    value: ${{ steps.install-bird.outputs.bird-bin }}
+  bird-version:
+    description: Installed BIRD version output.
+    value: ${{ steps.install-bird.outputs.bird-version }}
+  turbo-cache-hit:
+    description: Whether the Turbo cache was restored from an exact cache key.
+    value: ${{ steps.turbo-cache.outputs.cache-hit }}
+
+runs:
+  using: composite
+  steps:
+    - name: Harden runner
+      if: ${{ inputs.harden-runner == 'true' }}
+      uses: step-security/harden-runner@v2
+      with:
+        egress-policy: ${{ inputs.harden-runner-egress-policy }}
+
+    - name: Checkout
+      if: ${{ inputs.checkout == 'true' }}
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: ${{ inputs.fetch-depth }}
+        submodules: ${{ inputs.submodules }}
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        registry-url: ${{ inputs.registry-url }}
+
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: ${{ inputs.pnpm-version }}
+
+    - name: Validate setup-birdcc inputs
+      shell: bash
+      run: node "${{ github.action_path }}/scripts/validate-inputs.mjs"
+      env:
+        INPUT_CHECKOUT: ${{ inputs.checkout }}
+        INPUT_FETCH_DEPTH: ${{ inputs.fetch-depth }}
+        INPUT_SUBMODULES: ${{ inputs.submodules }}
+        INPUT_SUBMODULE_PATHS: ${{ inputs.submodule-paths }}
+        INPUT_NODE_VERSION: ${{ inputs.node-version }}
+        INPUT_PNPM_VERSION: ${{ inputs.pnpm-version }}
+        INPUT_REGISTRY_URL: ${{ inputs.registry-url }}
+        INPUT_WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        INPUT_INSTALL_DEPENDENCIES: ${{ inputs.install-dependencies }}
+        INPUT_INSTALL_COMMAND: ${{ inputs.install-command }}
+        INPUT_CACHE_TURBO: ${{ inputs.cache-turbo }}
+        INPUT_TURBO_CACHE_PATH: ${{ inputs.turbo-cache-path }}
+        INPUT_INSTALL_RUST: ${{ inputs.install-rust }}
+        INPUT_RUST_TOOLCHAIN: ${{ inputs.rust-toolchain }}
+        INPUT_RUST_COMPONENTS: ${{ inputs.rust-components }}
+        INPUT_RUST_TARGETS: ${{ inputs.rust-targets }}
+        INPUT_INSTALL_BIRD: ${{ inputs.install-bird }}
+        INPUT_BIRD_VERSION: ${{ inputs.bird-version }}
+        INPUT_BIRD_PACKAGE_SOURCE: ${{ inputs.bird-package-source }}
+        INPUT_HARDEN_RUNNER: ${{ inputs.harden-runner }}
+        INPUT_HARDEN_RUNNER_EGRESS_POLICY: ${{ inputs.harden-runner-egress-policy }}
+
+    - name: Resolve pnpm store path
+      if: ${{ inputs.install-dependencies == 'true' }}
+      id: pnpm-store
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+    - name: Cache pnpm store
+      if: ${{ inputs.install-dependencies == 'true' }}
+      uses: actions/cache@v4
+      with:
+        path: ${{ steps.pnpm-store.outputs.path }}
+        key: pnpm-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+        restore-keys: |
+          pnpm-${{ runner.os }}-
+
+    - name: Initialize selected submodules
+      if: ${{ inputs.submodule-paths != '' }}
+      shell: bash
+      run: node "${{ github.action_path }}/scripts/sync-submodules.mjs"
+      env:
+        INPUT_SUBMODULE_PATHS: ${{ inputs.submodule-paths }}
+
+    - name: Setup Rust
+      if: ${{ inputs.install-rust == 'true' }}
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ inputs.rust-toolchain }}
+        components: ${{ inputs.rust-components }}
+        targets: ${{ inputs.rust-targets }}
+
+    - name: Install dependencies
+      if: ${{ inputs.install-dependencies == 'true' }}
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: ${{ inputs.install-command }}
+
+    - name: Cache Turbo
+      if: ${{ inputs.cache-turbo == 'true' }}
+      id: turbo-cache
+      uses: actions/cache@v4
+      with:
+        path: ${{ inputs.working-directory }}/${{ inputs.turbo-cache-path }}
+        key: turbo-${{ runner.os }}-${{ github.sha }}
+        restore-keys: |
+          turbo-${{ runner.os }}-
+
+    - name: Install BIRD
+      if: ${{ inputs.install-bird == 'true' }}
+      id: install-bird
+      shell: bash
+      run: node "${{ github.action_path }}/scripts/install-bird.mjs"
+      env:
+        INPUT_BIRD_VERSION: ${{ inputs.bird-version }}
+        INPUT_BIRD_PACKAGE_SOURCE: ${{ inputs.bird-package-source }}
