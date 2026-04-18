@@ -1,5 +1,6 @@
 name: setup-birdcc
-description: Set up GitHub Actions jobs for linting, formatting, and parse-checking BIRD configs.
+description: Set up GitHub Actions jobs for linting, formatting, and
+  parse-checking BIRD configs.
 
 branding:
   icon: check-circle
@@ -106,7 +107,8 @@ outputs:
     description: Whether the Turbo cache was restored from an exact cache key.
     value: ${{ steps.turbo-cache.outputs.cache-hit }}
   changed-config-files:
-    description: Newline-separated list of changed BIRD config files detected via git diff. Empty when fetch-depth is not 0 or no PR context.
+    description: Newline-separated list of changed BIRD config files detected via
+      git diff. Empty when fetch-depth is not 0 or no PR context.
     value: ${{ steps.changed-files.outputs.changed-config-files }}
 
 runs:

@@ -196,12 +196,12 @@ This action installs BIRD on the runner only. It does not vendor, commit, or red
 
 ## Outputs
 
-| Output                | Description                                                                                         |
-| --------------------- | --------------------------------------------------------------------------------------------------- |
-| `bird-bin`            | Path to installed BIRD binary. Empty when `install-bird: "false"` or on non-Linux runners.          |
-| `bird-version`        | `bird --version` output. Empty when `install-bird: "false"`.                                        |
-| `turbo-cache-hit`     | Exact Turbo cache hit from `actions/cache`.                                                         |
-| `changed-config-files`| Newline-separated list of changed BIRD config files (`.conf`, `.bird`, `.bird2`, `.bird3`) detected via `git diff`. Requires `fetch-depth: "0"` and a PR context. |
+| Output                 | Description                                                                                                                                                       |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bird-bin`             | Path to installed BIRD binary. Empty when `install-bird: "false"` or on non-Linux runners.                                                                        |
+| `bird-version`         | `bird --version` output. Empty when `install-bird: "false"`.                                                                                                      |
+| `turbo-cache-hit`      | Exact Turbo cache hit from `actions/cache`.                                                                                                                       |
+| `changed-config-files` | Newline-separated list of changed BIRD config files (`.conf`, `.bird`, `.bird2`, `.bird3`) detected via `git diff`. Requires `fetch-depth: "0"` and a PR context. |
 
 ---
 

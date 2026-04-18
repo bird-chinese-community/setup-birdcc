@@ -28,17 +28,9 @@ const run = (command, args, options = {}) => {
 
 const sudo = (args, options) => run("sudo", args, options);
 
-export const resolveInstallPlan = ({
-  birdVersion = "2",
-  birdPackageSource = "auto",
-  codename,
-}) => {
+export const resolveInstallPlan = ({ birdVersion = "2", birdPackageSource = "auto", codename }) => {
   const resolvedSource =
-    birdPackageSource === "auto"
-      ? birdVersion === "3"
-        ? "cznic"
-        : "ubuntu"
-      : birdPackageSource;
+    birdPackageSource === "auto" ? (birdVersion === "3" ? "cznic" : "ubuntu") : birdPackageSource;
 
   if (birdVersion === "3" && resolvedSource === "ubuntu") {
     throw new Error(

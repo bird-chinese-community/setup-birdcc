@@ -198,12 +198,12 @@ jobs:
 
 ## 输出参数
 
-| 输出参数                | 说明                                                                                         |
-| ----------------------- | -------------------------------------------------------------------------------------------- |
-| `bird-bin`              | 已安装 BIRD 二进制的路径。`install-bird: "false"` 或非 Linux Runner 时为空。                 |
-| `bird-version`          | `bird --version` 的输出内容。`install-bird: "false"` 时为空。                                |
-| `turbo-cache-hit`       | 来自 `actions/cache` 的 Turbo 缓存精确命中状态。                                             |
-| `changed-config-files`  | 通过 `git diff` 检测到的变更 BIRD 配置文件列表（`.conf`、`.bird`、`.bird2`、`.bird3`），以换行符分隔。需要 `fetch-depth: "0"` 和 PR 上下文。 |
+| 输出参数               | 说明                                                                                                                                         |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bird-bin`             | 已安装 BIRD 二进制的路径。`install-bird: "false"` 或非 Linux Runner 时为空。                                                                 |
+| `bird-version`         | `bird --version` 的输出内容。`install-bird: "false"` 时为空。                                                                                |
+| `turbo-cache-hit`      | 来自 `actions/cache` 的 Turbo 缓存精确命中状态。                                                                                             |
+| `changed-config-files` | 通过 `git diff` 检测到的变更 BIRD 配置文件列表（`.conf`、`.bird`、`.bird2`、`.bird3`），以换行符分隔。需要 `fetch-depth: "0"` 和 PR 上下文。 |
 
 ---
 
