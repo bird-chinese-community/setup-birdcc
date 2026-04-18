@@ -1,0 +1,29 @@
+name: BIRD Config Lint
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bird-config-lint-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up BIRD config tooling
+        id: setup
+        uses: bird-chinese-community/setup-birdcc@v1
+        with:
+          install-dependencies: "false"
+          cache-turbo: "false"
+
+      - name: Lint and validate the main config
+        run: pnpm dlx @birdcc/cli@latest birdcc lint bird.conf --bird
+        env:
+          BIRD_BIN: ${{ steps.setup.outputs.bird-bin }}

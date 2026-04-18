@@ -1,0 +1,23 @@
+name: BIRD Config Format Check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up BIRD config tooling
+        uses: bird-chinese-community/setup-birdcc@v1
+        with:
+          install-dependencies: "false"
+          cache-turbo: "false"
+          install-bird: "false"
+
+      - name: Check formatting
+        run: pnpm dlx @birdcc/cli@latest birdcc fmt bird.conf --check

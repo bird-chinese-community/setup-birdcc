@@ -1,0 +1,119 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  script-tests:
+    name: Node script tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --check scripts/install-bird.mjs
+      - run: node --check scripts/release-dry-run.mjs
+      - run: node --check scripts/resolve-changed-files.mjs
+      - run: node --check scripts/sync-submodules.mjs
+      - run: node --check scripts/validate-inputs.mjs
+      - run: node --test test/*.test.mjs
+      - run: node scripts/release-dry-run.mjs --dry-run --tag v1.0.0
+
+  smoke-basic:
+    name: Basic action smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run setup-birdcc
+        uses: ./
+        with:
+          checkout: "false"
+          install-dependencies: "false"
+          cache-turbo: "false"
+          install-bird: "false"
+      - name: Verify Node and pnpm
+        run: |
+          node --version
+          pnpm --version
+
+  smoke-invalid-input:
+    name: Invalid input smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject invalid bird-version
+        id: invalid-bird-version
+        continue-on-error: true
+        uses: ./
+        with:
+          checkout: "false"
+          install-dependencies: "false"
+          cache-turbo: "false"
+          install-bird: "false"
+          bird-version: "4"
+      - name: Verify invalid input failed
+        run: |
+          if [ "${{ steps.invalid-bird-version.outcome }}" != "failure" ]; then
+            echo "::error::Invalid bird-version was not rejected"
+            exit 1
+          fi
+
+  smoke-rust:
+    name: Rust action smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run setup-birdcc with Rust
+        uses: ./
+        with:
+          checkout: "false"
+          install-dependencies: "false"
+          cache-turbo: "false"
+          install-bird: "false"
+          install-rust: "true"
+      - name: Verify Rust toolchain
+        run: |
+          cargo --version
+          rustfmt --version
+          cargo clippy --version
+          rustup target list --installed | grep -x "wasm32-unknown-unknown"
+
+  smoke-bird:
+    name: BIRD${{ matrix.bird-version }} action smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        bird-version: ["2", "3"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run setup-birdcc with BIRD
+        id: setup
+        uses: ./
+        with:
+          checkout: "false"
+          install-dependencies: "false"
+          cache-turbo: "false"
+          install-bird: "true"
+          bird-version: ${{ matrix.bird-version }}
+      - name: Verify BIRD binary
+        run: |
+          "${{ steps.setup.outputs.bird-bin }}" --version
+          "${{ steps.setup.outputs.bird-bin }}" -p -c test/fixtures/bird.conf

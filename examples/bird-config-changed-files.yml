@@ -1,0 +1,52 @@
+name: Changed BIRD Configs
+
+on:
+  pull_request:
+    paths:
+      - "**/*.conf"
+      - "**/*.bird"
+      - "bird.config.json"
+      - "birdcc.config.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: changed-bird-configs-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changed-configs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up BIRD config tooling
+        id: setup
+        uses: bird-chinese-community/setup-birdcc@v1
+        with:
+          fetch-depth: "0"
+          install-dependencies: "false"
+          cache-turbo: "false"
+
+      - name: Lint changed config files
+        shell: bash
+        run: |
+          mapfile -t files < <(
+            git diff --name-only "${{ github.event.pull_request.base.sha }}" "$GITHUB_SHA" -- \
+              "*.bird" \
+              "*.conf" \
+              "configs/**" \
+              "conf/**" \
+              | sort -u
+          )
+
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No changed BIRD config files."
+            exit 0
+          fi
+
+          for file in "${files[@]}"; do
+            pnpm dlx @birdcc/cli@latest birdcc fmt "$file" --check
+            pnpm dlx @birdcc/cli@latest birdcc lint "$file" --bird
+          done
+        env:
+          BIRD_BIN: ${{ steps.setup.outputs.bird-bin }}

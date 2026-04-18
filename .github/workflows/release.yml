@@ -1,0 +1,78 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Semver tag to dry-run, for example v1.0.0"
+        required: true
+        default: "v1.0.0"
+        type: string
+      dry_run:
+        description: "Validate release readiness without creating a GitHub Release"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Release dry-run and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Resolve release tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "name=${{ inputs.tag_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run release dry-run
+        id: dry-run
+        run: node scripts/release-dry-run.mjs --dry-run --tag "${{ steps.tag.outputs.name }}" --check-clean
+
+      - name: Create source archive
+        run: git archive --format=tar.gz --output "setup-birdcc-${{ steps.dry-run.outputs.tag }}.tar.gz" HEAD
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: setup-birdcc-${{ steps.dry-run.outputs.tag }}
+          path: setup-birdcc-${{ steps.dry-run.outputs.tag }}.tar.gz
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: ${{ github.event_name == 'push' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.dry-run.outputs.tag }}
+          name: setup-birdcc ${{ steps.dry-run.outputs.tag }}
+          generate_release_notes: true
+          files: setup-birdcc-${{ steps.dry-run.outputs.tag }}.tar.gz
+          body: |
+            ## Usage
+
+            ```yaml
+            - uses: bird-chinese-community/setup-birdcc@${{ steps.dry-run.outputs.major-tag }}
+            ```
+
+            ## Pinning
+
+            ```yaml
+            - uses: bird-chinese-community/setup-birdcc@${{ steps.dry-run.outputs.sha }}
+            ```

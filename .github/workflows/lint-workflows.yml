@@ -1,0 +1,26 @@
+name: Lint Workflows
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - "action.yml"
+      - "examples/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+jobs:
+  actionlint:
+    name: actionlint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: reviewdog/action-actionlint@v1
+        with:
+          reporter: github-pr-check
+          fail_level: error

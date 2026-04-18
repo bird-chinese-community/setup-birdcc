@@ -1,0 +1,14 @@
+{
+  "name": "setup-birdcc",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@10.18.3",
+  "scripts": {
+    "check:scripts": "node --check scripts/install-bird.mjs && node --check scripts/release-dry-run.mjs && node --check scripts/sync-submodules.mjs && node --check scripts/validate-inputs.mjs && node --check scripts/resolve-changed-files.mjs",
+    "ci": "pnpm run check:scripts && pnpm test && pnpm run release:dry-run -- --tag v1.0.0",
+    "lint:workflows": "actionlint .github/workflows/*.yml examples/*.yml",
+    "release:dry-run": "node scripts/release-dry-run.mjs --dry-run",
+    "test": "node --test test/*.test.mjs"
+  }
+}

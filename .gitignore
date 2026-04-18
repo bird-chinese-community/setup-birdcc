@@ -1,0 +1,12 @@
+node_modules/
+.*/
+!.github/
+!.vscode/
+
+*.md
+!README.md
+!README*.md
+!CONTRIBUTING.md
+!CHANGELOG.md
+!CODE_OF_CONDUCT.md
+!SECURITY.md
