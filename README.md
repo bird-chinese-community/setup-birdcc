@@ -142,8 +142,13 @@ actionlint .github/workflows/*.yml
 Run selected GitHub Actions jobs locally with `act`:
 
 ```bash
-act -j smoke-basic --reuse
-act -j smoke-bird --reuse
+act -j smoke-basic --reuse \
+  --container-architecture linux/amd64 \
+  -P ubuntu-latest=catthehacker/ubuntu:act-latest
+
+act -j smoke-bird --reuse \
+  --container-architecture linux/amd64 \
+  -P ubuntu-latest=catthehacker/ubuntu:act-latest
 ```
 
 Install local tooling on macOS:
@@ -151,6 +156,8 @@ Install local tooling on macOS:
 ```bash
 brew install act actionlint
 ```
+
+On Apple Silicon, the Rust smoke job may fail under `act` because Rust tools run through emulation in the local container. Treat GitHub-hosted `ubuntu-latest` as the source of truth for the Rust matrix.
 
 ## Publishing
 
