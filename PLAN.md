@@ -174,4 +174,70 @@ Installing and invoking `bird` as an external process is **fully compliant** wit
 2. A proposed diff for `README.md` (or a new section) covering local CI tooling.
 3. A concise summary of any manual steps the user must perform (e.g., adding `NPM_TOKEN` secret).
 
+---
+
+## 附录
+
+### Multi-Stage Dockerfile Best Practices
+
+See `.agents/skills/multi-stage-dockerfile/SKILL.md` for detailed guidelines on creating efficient multi-stage Dockerfiles.
+
+### GitHub Actions Quick Reference
+
+See `.agents/skills/github-actions/` for comprehensive examples and best practices on GitHub Actions workflows, reusable actions, and notifications.
+
+### Docker Expert Quick Reference
+
+See `.agents/skills/docker-expert/` for common Dockerfile patterns, commands, and optimization techniques.
+
+### Install BIRD Binary via CZNIC apt repository in CI
+
+- Ubuntu + BIRD3 (latest stable)
+
+```sh
+#!/bin/bash
+
+echo "[Init] Install the BIRD3 from CZNIC apt repository"
+
+apt update
+
+apt -y install apt-transport-https ca-certificates wget curl lsb-release
+
+wget -O /usr/share/keyrings/cznic-labs-pkg.gpg https://pkg.labs.nic.cz/gpg
+
+echo "deb [signed-by=/usr/share/keyrings/cznic-labs-pkg.gpg] https://pkg.labs.nic.cz/bird3 $(lsb_release -sc) main" | tee /etc/apt/sources.list.d/cznic-labs-bird3.list
+
+echo "+ apt update"
+apt update
+
+echo "+ apt install bird3"
+apt install bird3
+
+echo "[Done]"
+```
+
+- Ubuntu + BIRD2 (latest stable)
+
+```sh
+#!/bin/bash
+
+echo "[Init] Install the BIRD2 from CZNIC apt repository"
+
+apt update
+
+apt -y install apt-transport-https ca-certificates wget curl lsb-release
+
+wget -O /usr/share/keyrings/cznic-labs-pkg.gpg https://pkg.labs.nic.cz/gpg
+
+echo "deb [signed-by=/usr/share/keyrings/cznic-labs-pkg.gpg] https://pkg.labs.nic.cz/bird2 $(lsb_release -sc) main" | tee /etc/apt/sources.list.d/cznic-labs-bird2.list
+
+echo "+ apt update"
+apt update
+
+echo "+ apt install bird2"
+apt install bird2
+
+echo "[Done]"
+```
+
 **End of PLAN.md**
