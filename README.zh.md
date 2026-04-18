@@ -175,6 +175,7 @@ jobs:
 | `fetch-depth`                 | `0`                                               | checkout 的 fetch 深度。保持 `0` 可支持变更文件检测和历史对比工作流。                 |
 | `submodules`                  | `false`                                           | 传给 checkout 的子模块模式，可选 `false`、`true` 或 `recursive`。                     |
 | `submodule-paths`             | 空                                                | 以换行符或逗号分隔的子模块路径，使用 `git submodule update --init --depth 1` 初始化。 |
+| `submodule-timeout`           | `120`                                             | 每个子模块 git 操作的超时时间（秒）。                                                 |
 | `node-version`                | `22`                                              | Node.js 版本。                                                                        |
 | `pnpm-version`                | `10.18.3`                                         | pnpm 版本。                                                                           |
 | `registry-url`                | `https://registry.npmjs.org`                      | 传给 `actions/setup-node` 的 npm 注册表地址。                                         |
@@ -197,11 +198,32 @@ jobs:
 
 ## 输出参数
 
-| 输出参数          | 说明                                                          |
-| ----------------- | ------------------------------------------------------------- |
-| `bird-bin`        | 已安装 BIRD 二进制的路径。`install-bird: "false"` 时为空。    |
-| `bird-version`    | `bird --version` 的输出内容。`install-bird: "false"` 时为空。 |
-| `turbo-cache-hit` | 来自 `actions/cache` 的 Turbo 缓存精确命中状态。              |
+| 输出参数                | 说明                                                                                         |
+| ----------------------- | -------------------------------------------------------------------------------------------- |
+| `bird-bin`              | 已安装 BIRD 二进制的路径。`install-bird: "false"` 或非 Linux Runner 时为空。                 |
+| `bird-version`          | `bird --version` 的输出内容。`install-bird: "false"` 时为空。                                |
+| `turbo-cache-hit`       | 来自 `actions/cache` 的 Turbo 缓存精确命中状态。                                             |
+| `changed-config-files`  | 通过 `git diff` 检测到的变更 BIRD 配置文件列表（`.conf`、`.bird`、`.bird2`、`.bird3`），以换行符分隔。需要 `fetch-depth: "0"` 和 PR 上下文。 |
+
+---
+
+## BIRD_BIN 环境变量
+
+`@birdcc/cli` 通过 `BIRD_BIN` 环境变量定位 BIRD 二进制文件，用于 `birdcc lint --bird` 的解析验证。解析链如下：
+
+1. `BIRD_BIN` 环境变量（由消费工作流从 `steps.<id>.outputs.bird-bin` 获取并设置）
+2. `$PATH` 中的 `bird`（`@birdcc/cli` 的兜底策略）
+
+在 lint 步骤中通过 env 传递此输出：
+
+```yaml
+- name: 检查配置
+  run: pnpm dlx @birdcc/cli@latest birdcc lint bird.conf --bird
+  env:
+    BIRD_BIN: ${{ steps.setup.outputs.bird-bin }}
+```
+
+在非 Linux Runner 上，`bird-bin` 输出为空，`@birdcc/cli` 会优雅地跳过 BIRD 解析验证。
 
 ---
 

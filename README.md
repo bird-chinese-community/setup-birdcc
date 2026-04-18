@@ -173,6 +173,7 @@ This action installs BIRD on the runner only. It does not vendor, commit, or red
 | `fetch-depth`                 | `0`                                               | Checkout fetch depth. Keep `0` for changed-file or affected-history workflows.               |
 | `submodules`                  | `false`                                           | Passed to checkout. Use `false`, `true`, or `recursive`.                                     |
 | `submodule-paths`             | empty                                             | Newline or comma separated paths to initialize with `git submodule update --init --depth 1`. |
+| `submodule-timeout`           | `120`                                             | Timeout in seconds for each submodule git operation.                                         |
 | `node-version`                | `22`                                              | Node.js version.                                                                             |
 | `pnpm-version`                | `10.18.3`                                         | pnpm version.                                                                                |
 | `registry-url`                | `https://registry.npmjs.org`                      | npm registry for `actions/setup-node`.                                                       |
@@ -195,11 +196,32 @@ This action installs BIRD on the runner only. It does not vendor, commit, or red
 
 ## Outputs
 
-| Output            | Description                                                        |
-| ----------------- | ------------------------------------------------------------------ |
-| `bird-bin`        | Path to installed BIRD binary. Empty when `install-bird: "false"`. |
-| `bird-version`    | `bird --version` output. Empty when `install-bird: "false"`.       |
-| `turbo-cache-hit` | Exact Turbo cache hit from `actions/cache`.                        |
+| Output                | Description                                                                                         |
+| --------------------- | --------------------------------------------------------------------------------------------------- |
+| `bird-bin`            | Path to installed BIRD binary. Empty when `install-bird: "false"` or on non-Linux runners.          |
+| `bird-version`        | `bird --version` output. Empty when `install-bird: "false"`.                                        |
+| `turbo-cache-hit`     | Exact Turbo cache hit from `actions/cache`.                                                         |
+| `changed-config-files`| Newline-separated list of changed BIRD config files (`.conf`, `.bird`, `.bird2`, `.bird3`) detected via `git diff`. Requires `fetch-depth: "0"` and a PR context. |
+
+---
+
+## BIRD_BIN Environment Variable
+
+`@birdcc/cli` reads the `BIRD_BIN` environment variable to locate the BIRD binary for `birdcc lint --bird` parse validation. The resolution chain is:
+
+1. `BIRD_BIN` env var (set by the consumer workflow from `steps.<id>.outputs.bird-bin`)
+2. `bird` on `$PATH` (fallback in `@birdcc/cli`)
+
+Pass the output as an env var in your lint step:
+
+```yaml
+- name: Lint config
+  run: pnpm dlx @birdcc/cli@latest birdcc lint bird.conf --bird
+  env:
+    BIRD_BIN: ${{ steps.setup.outputs.bird-bin }}
+```
+
+On non-Linux runners, `bird-bin` will be empty and `@birdcc/cli` will skip BIRD parse validation gracefully.
 
 ---
 

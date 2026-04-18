@@ -1,6 +1,10 @@
 name: setup-birdcc
 description: Set up GitHub Actions jobs for linting, formatting, and parse-checking BIRD configs.
 
+branding:
+  icon: check-circle
+  color: blue
+
 inputs:
   checkout:
     description: Run actions/checkout before setting up the toolchain.
@@ -18,6 +22,10 @@ inputs:
     description: Newline or comma separated submodule paths to initialize with depth 1.
     required: false
     default: ""
+  submodule-timeout:
+    description: Timeout in seconds for each submodule git operation. Defaults to 120.
+    required: false
+    default: "120"
   node-version:
     description: Node.js version to install.
     required: false
@@ -97,31 +105,43 @@ outputs:
   turbo-cache-hit:
     description: Whether the Turbo cache was restored from an exact cache key.
     value: ${{ steps.turbo-cache.outputs.cache-hit }}
+  changed-config-files:
+    description: Newline-separated list of changed BIRD config files detected via git diff. Empty when fetch-depth is not 0 or no PR context.
+    value: ${{ steps.changed-files.outputs.changed-config-files }}
 
 runs:
   using: composite
   steps:
     - name: Harden runner
       if: ${{ inputs.harden-runner == 'true' }}
-      uses: step-security/harden-runner@v2
+      uses: step-security/harden-runner@6c3c2f2c1c457b00c10c4848d6f5491db3b629df # v2
       with:
         egress-policy: ${{ inputs.harden-runner-egress-policy }}
 
     - name: Checkout
       if: ${{ inputs.checkout == 'true' }}
-      uses: actions/checkout@v4
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       with:
         fetch-depth: ${{ inputs.fetch-depth }}
         submodules: ${{ inputs.submodules }}
 
+    - name: Detect changed config files
+      if: ${{ inputs.checkout == 'true' && inputs.fetch-depth == '0' }}
+      id: changed-files
+      shell: bash
+      run: node "${{ github.action_path }}/scripts/resolve-changed-files.mjs"
+      env:
+        INPUT_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        INPUT_HEAD_SHA: ${{ github.sha }}
+
     - name: Setup Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
       with:
         node-version: ${{ inputs.node-version }}
         registry-url: ${{ inputs.registry-url }}
 
     - name: Setup pnpm
-      uses: pnpm/action-setup@v4
+      uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
       with:
         version: ${{ inputs.pnpm-version }}
 
@@ -160,7 +180,7 @@ runs:
 
     - name: Cache pnpm store
       if: ${{ inputs.install-dependencies == 'true' }}
-      uses: actions/cache@v4
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: ${{ steps.pnpm-store.outputs.path }}
         key: pnpm-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
@@ -173,10 +193,11 @@ runs:
       run: node "${{ github.action_path }}/scripts/sync-submodules.mjs"
       env:
         INPUT_SUBMODULE_PATHS: ${{ inputs.submodule-paths }}
+        INPUT_SUBMODULE_TIMEOUT: ${{ inputs.submodule-timeout }}
 
     - name: Setup Rust
       if: ${{ inputs.install-rust == 'true' }}
-      uses: dtolnay/rust-toolchain@master
+      uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master
       with:
         toolchain: ${{ inputs.rust-toolchain }}
         components: ${{ inputs.rust-components }}
@@ -191,7 +212,7 @@ runs:
     - name: Cache Turbo
       if: ${{ inputs.cache-turbo == 'true' }}
       id: turbo-cache
-      uses: actions/cache@v4
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: ${{ inputs.working-directory }}/${{ inputs.turbo-cache-path }}
         key: turbo-${{ runner.os }}-${{ github.sha }}

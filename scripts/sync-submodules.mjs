@@ -3,13 +3,21 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { parsePathList, validateConfig } from "./validate-inputs.mjs";
 
-const run = (command, args) => {
+const DEFAULT_TIMEOUT_MS = 120_000;
+
+const run = (command, args, { timeoutMs } = {}) => {
   const result = spawnSync(command, args, {
     stdio: "inherit",
     shell: false,
+    timeout: timeoutMs,
   });
 
   if (result.error) {
+    if (result.error.code === "ETIMEDOUT") {
+      throw new Error(
+        `${command} ${args.join(" ")} timed out after ${Math.round(timeoutMs / 1000)}s`,
+      );
+    }
     throw result.error;
   }
   if (result.status !== 0) {
@@ -23,7 +31,16 @@ export const buildSubmoduleCommands = (paths) =>
     ["git", ["submodule", "update", "--init", "--depth", "1", "--", path]],
   ]);
 
-export const syncSubmodules = (rawPaths) => {
+export const parseTimeoutSeconds = (raw) => {
+  if (!raw || raw === "") return DEFAULT_TIMEOUT_MS;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) {
+    throw new Error(`Invalid submodule-timeout value: ${raw}`);
+  }
+  return n * 1000;
+};
+
+export const syncSubmodules = (rawPaths, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) => {
   const paths = parsePathList(rawPaths);
   const { submodulePaths } = validateConfig({ submodulePaths: paths.join("\n") });
 
@@ -33,13 +50,14 @@ export const syncSubmodules = (rawPaths) => {
   }
 
   for (const [command, args] of buildSubmoduleCommands(submodulePaths)) {
-    run(command, args);
+    run(command, args, { timeoutMs });
   }
 };
 
 const main = () => {
   try {
-    syncSubmodules(process.env.INPUT_SUBMODULE_PATHS ?? "");
+    const timeoutMs = parseTimeoutSeconds(process.env.INPUT_SUBMODULE_TIMEOUT);
+    syncSubmodules(process.env.INPUT_SUBMODULE_PATHS ?? "", { timeoutMs });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`::error::${message}`);

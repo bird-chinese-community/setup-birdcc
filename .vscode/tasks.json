@@ -1,0 +1,51 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run tests",
+      "type": "shell",
+      "command": "pnpm test",
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "Check scripts",
+      "type": "shell",
+      "command": "pnpm run check:scripts",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "Lint workflows",
+      "type": "shell",
+      "command": "actionlint .github/workflows/*.yml examples/*.yml",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "Act: smoke-basic",
+      "type": "shell",
+      "command": "act -j smoke-basic --reuse",
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "Act: smoke-bird",
+      "type": "shell",
+      "command": "act -j smoke-bird --reuse",
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "Release dry-run",
+      "type": "shell",
+      "command": "pnpm run release:dry-run -- --tag v1.0.0",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "Full CI",
+      "type": "shell",
+      "command": "pnpm run ci",
+      "group": { "kind": "test", "isDefault": true },
+      "presentation": { "reveal": "always", "panel": "shared" }
+    }
+  ]
+}

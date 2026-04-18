@@ -213,16 +213,21 @@ This lets maintainers run `act -j smoke-basic` without extra flags.
 
 ## Acceptance Checklist for Next Milestone
 
-- [ ] `changed-config-files` output implemented and documented
-- [ ] `birdcc-version` input and output added
-- [ ] Non-Linux runner warning added to `install-bird.mjs`
-- [ ] Third-party action SHA pinning completed in `action.yml`
-- [ ] `branding` fields added to `action.yml`
-- [ ] Published to GitHub Actions Marketplace
-- [ ] `.actrc` added to repository root
-- [ ] `.vscode/tasks.json` added
-- [ ] `CONTRIBUTING.md` created
-- [ ] Integration smoke test against a real config repository passing in CI
+- [x] `changed-config-files` output implemented and documented — `scripts/resolve-changed-files.mjs` + action.yml step + output
+- [ ] `birdcc-version` input and output added — Deferred; requires upstream `@birdcc/cli` changes
+- [x] Non-Linux runner warning added to `install-bird.mjs` — Emits `::warning::` + empty outputs instead of throwing
+- [x] BIRD installation idempotency check — `findExistingBird()` skips apt when binary exists
+- [x] Submodule initialization timeout guard — `submodule-timeout` input + `parseTimeoutSeconds()` in sync-submodules.mjs
+- [x] Third-party action SHA pinning completed in `action.yml` — All 6 actions pinned with `# vX` comments
+- [x] `branding` fields added to `action.yml` — `icon: check-circle`, `color: blue`
+- [ ] Published to GitHub Actions Marketplace — Requires manual release creation
+- [x] `.actrc` added to repository root
+- [x] `.vscode/tasks.json` added
+- [x] `CONTRIBUTING.md` created
+- [x] `BIRD_BIN` environment variable documented in README.md and README.zh.md
+- [ ] Integration smoke test against a real config repository passing in CI — Future work
+- [ ] `bird-config-repo` project template created — Future work
+- [ ] `cache-pnpm-dlx` input for config-only repos — Future work
 
 ---
 

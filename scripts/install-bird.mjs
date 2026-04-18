@@ -110,6 +110,15 @@ const commandExists = (command) => {
   return result.status === 0;
 };
 
+const findExistingBird = () => {
+  for (const candidate of birdBinaryCandidates) {
+    if (commandExists(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+};
+
 const findBirdBinary = () => {
   for (const candidate of birdBinaryCandidates) {
     if (commandExists(candidate)) {
@@ -148,7 +157,12 @@ const installBird = () => {
   const dryRun = process.env.SETUP_BIRDCC_DRY_RUN === "true";
 
   if (!dryRun && process.platform !== "linux") {
-    throw new Error("setup-birdcc can install BIRD only on Linux runners");
+    const os = process.env.RUNNER_OS ?? process.platform;
+    console.log(
+      `::warning::BIRD installation is only supported on Linux runners. Current OS: ${os}. Skipping BIRD install.`,
+    );
+    writeGithubOutput({ birdBin: "", birdVersion: "" });
+    return;
   }
 
   const codename = dryRun
@@ -162,6 +176,15 @@ const installBird = () => {
 
   if (dryRun) {
     console.log(JSON.stringify(plan, null, 2));
+    return;
+  }
+
+  const existingBin = findExistingBird();
+  if (existingBin) {
+    const birdVersion = run(existingBin, ["--version"], { capture: true });
+    console.log(`BIRD binary already installed: ${existingBin}`);
+    console.log(`BIRD version: ${birdVersion}`);
+    writeGithubOutput({ birdBin: existingBin, birdVersion });
     return;
   }
 
