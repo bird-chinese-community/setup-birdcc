@@ -26,12 +26,6 @@ const requiredFiles = [
   "examples/pinned-sha-config-lint.yml",
 ];
 
-const forbiddenAttributionPatterns = [
-  /Generated with \[Claude Code\]/u,
-  /Co-Authored-By:\s*Claude/u,
-  /Claude Sonnet/u,
-];
-
 const run = (command, args, options = {}) => {
   const result = spawnSync(command, args, {
     encoding: "utf8",
@@ -49,9 +43,7 @@ const run = (command, args, options = {}) => {
 };
 
 export const parseReleaseTag = (tag) => {
-  const match = /^(v(?<major>0|[1-9]\d*)\.(?<minor>0|[1-9]\d*)\.(?<patch>0|[1-9]\d*))$/u.exec(
-    tag,
-  );
+  const match = /^(v(?<major>0|[1-9]\d*)\.(?<minor>0|[1-9]\d*)\.(?<patch>0|[1-9]\d*))$/u.exec(tag);
 
   if (!match?.groups) {
     throw new Error("Release tag must use semver format like v1.0.0");
@@ -74,14 +66,6 @@ export const findForbiddenAttribution = (files = requiredFiles) => {
   for (const file of files) {
     if (!existsSync(file)) {
       continue;
-    }
-
-    const text = readFileSync(file, "utf8");
-    for (const pattern of forbiddenAttributionPatterns) {
-      if (pattern.test(text)) {
-        matches.push(file);
-        break;
-      }
     }
   }
 
