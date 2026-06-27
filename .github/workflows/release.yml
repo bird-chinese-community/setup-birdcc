@@ -26,11 +26,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
 
@@ -50,7 +50,7 @@ jobs:
       - name: Create source archive
         run: git archive --format=tar.gz --output "setup-birdcc-${{ steps.dry-run.outputs.tag }}.tar.gz" HEAD
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: setup-birdcc-${{ steps.dry-run.outputs.tag }}
           path: setup-birdcc-${{ steps.dry-run.outputs.tag }}.tar.gz
@@ -58,7 +58,7 @@ jobs:
 
       - name: Publish GitHub Release
         if: ${{ github.event_name == 'push' }}
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.dry-run.outputs.tag }}
           name: setup-birdcc ${{ steps.dry-run.outputs.tag }}
