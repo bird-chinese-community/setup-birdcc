@@ -1,7 +1,25 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { resolveInstallPlan } from "../scripts/install-bird.mjs";
+import { resolveInstallPlan, resolveUbuntuCodename } from "../scripts/install-bird.mjs";
+
+test("resolveUbuntuCodename reads the standard version codename", () => {
+  assert.equal(
+    resolveUbuntuCodename('NAME="Ubuntu"\nVERSION_CODENAME=noble\nUBUNTU_CODENAME=noble\n'),
+    "noble",
+  );
+});
+
+test("resolveUbuntuCodename falls back to the Ubuntu-specific codename", () => {
+  assert.equal(resolveUbuntuCodename("NAME=Ubuntu\nUBUNTU_CODENAME='jammy'\n"), "jammy");
+});
+
+test("resolveUbuntuCodename rejects release metadata without a codename", () => {
+  assert.throws(
+    () => resolveUbuntuCodename('NAME="Ubuntu"\nVERSION_ID="24.04"\n'),
+    /Unable to detect Ubuntu codename from \/etc\/os-release/,
+  );
+});
 
 test("resolveInstallPlan uses Ubuntu apt for default BIRD2 installs", () => {
   const plan = resolveInstallPlan({
