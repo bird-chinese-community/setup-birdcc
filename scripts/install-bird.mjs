@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { appendFileSync, mkdtempSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -52,12 +52,37 @@ export const resolveInstallPlan = ({ birdVersion = "2", birdPackageSource = "aut
   };
 };
 
-const getUbuntuCodename = () => {
-  const codename = run("lsb_release", ["-sc"], { capture: true });
-  if (!codename) {
-    throw new Error("Unable to detect Ubuntu codename with lsb_release -sc");
+export const resolveUbuntuCodename = (osRelease) => {
+  const fields = new Map();
+
+  for (const line of osRelease.split("\n")) {
+    const separator = line.indexOf("=");
+    if (separator <= 0) continue;
+
+    const key = line.slice(0, separator).trim();
+    const rawValue = line.slice(separator + 1).trim();
+    const quoted =
+      rawValue.length >= 2 &&
+      ((rawValue.startsWith('"') && rawValue.endsWith('"')) ||
+        (rawValue.startsWith("'") && rawValue.endsWith("'")));
+    fields.set(key, quoted ? rawValue.slice(1, -1) : rawValue);
   }
+
+  const codename = fields.get("VERSION_CODENAME") || fields.get("UBUNTU_CODENAME");
+  if (!codename) {
+    throw new Error("Unable to detect Ubuntu codename from /etc/os-release");
+  }
+
   return codename;
+};
+
+const getUbuntuCodename = () => {
+  try {
+    return resolveUbuntuCodename(readFileSync("/etc/os-release", "utf8"));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Unable to read Ubuntu release metadata: ${message}`, { cause: error });
+  }
 };
 
 const installCznicRepository = (repository) => {
@@ -69,7 +94,6 @@ const installCznicRepository = (repository) => {
     "apt-transport-https",
     "ca-certificates",
     "curl",
-    "lsb-release",
   ]);
   sudo(["install", "-d", "-m", "0755", "/usr/share/keyrings"]);
 
